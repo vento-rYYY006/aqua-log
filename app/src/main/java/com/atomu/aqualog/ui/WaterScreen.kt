@@ -109,7 +109,7 @@ fun WaterScreen(vm: AppViewModel) {
 }
 
 @Composable
-private fun WaterDialog(
+internal fun WaterDialog(
     init: WaterTest,
     tanks: List<Tank>,
     onDismiss: () -> Unit,

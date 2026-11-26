@@ -9,6 +9,9 @@ import androidx.work.WorkManager
 import androidx.work.workDataOf
 import com.atomu.aqualog.data.AppDatabase
 import com.atomu.aqualog.data.Livestock
+import com.atomu.aqualog.data.DiaryEntry
+import com.atomu.aqualog.data.isDaily
+import com.atomu.aqualog.notify.TimeAlarms
 import com.atomu.aqualog.data.LivestockNote
 import com.atomu.aqualog.data.LivestockPhoto
 import com.atomu.aqualog.data.LogEntry
@@ -41,6 +44,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     val reminders = dao.reminders().state()
     val gallery = dao.gallery().state()
     val notes = dao.notes().state()
+    val diary = dao.diary().state()
 
     /** 画面上部で選んでいる水槽（null = すべて） */
     val selectedTank = MutableStateFlow<Long?>(null)
@@ -53,6 +57,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun deleteTank(t: Tank) = viewModelScope.launch {
         dao.photosOf(t.id).forEach { deleteFile(it) }
         dao.galleryPathsOfTank(t.id).forEach { deleteFile(it) }
+        dao.diaryPhotosOf(t.id).forEach { deleteFile(it) }
         dao.tankPhoto(t.id)?.let { deleteFile(it) }
         dao.deleteTankCascade(t)
         if (selectedTank.value == t.id) selectedTank.value = null
@@ -115,8 +120,42 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     // リマインド
-    fun saveReminder(r: Reminder) = viewModelScope.launch { dao.upsertReminder(r) }
-    fun deleteReminder(r: Reminder) = viewModelScope.launch { dao.deleteReminder(r) }
+    fun saveReminder(r: Reminder) = viewModelScope.launch {
+        dao.upsertReminder(r)
+        TimeAlarms.rescheduleAll(getApplication())
+    }
+    fun deleteReminder(r: Reminder) = viewModelScope.launch {
+        dao.deleteReminder(r)
+        TimeAlarms.rescheduleAll(getApplication())
+    }
+
+    /** 今日やることのチェック：完了にして作業ログ（時刻つき）にも残す */
+    fun checkItem(r: Reminder) = viewModelScope.launch {
+        val t = today()
+        val m = nowMinutes()
+        dao.upsertReminder(r.copy(lastDone = t, doneTime = m))
+        val type = r.logType ?: r.title
+        val note = if (r.logType != null && r.title != r.logType) r.title else ""
+        val ids = r.tankId?.let { listOf(it) } ?: dao.tanksOnce().map { it.id }
+        ids.forEach {
+            dao.upsertLog(LogEntry(tankId = it, date = t, type = type, note = note, time = m))
+            if (!r.isDaily) dao.markDoneByType(type, it, t)
+        }
+    }
+
+    /** チェックを外す：今日つけた記録も消す */
+    fun uncheckItem(r: Reminder) = viewModelScope.launch {
+        val t = today()
+        val m = r.doneTime
+        dao.upsertReminder(r.copy(lastDone = t - 1, doneTime = null))
+        if (m != null) dao.deleteLogsAt(r.logType ?: r.title, t, m)
+    }
+
+    // 日記
+    fun saveDiary(d: DiaryEntry, previousPhoto: String?) = viewModelScope.launch {
+        if (previousPhoto != null && previousPhoto != d.photoPath) deleteFile(previousPhoto)
+        dao.upsertDiary(d)
+    }
     fun completeReminder(r: Reminder) = viewModelScope.launch {
         dao.upsertReminder(r.copy(lastDone = maxOf(r.lastDone, today())))
     }

@@ -49,6 +49,10 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.atomu.aqualog.data.nextDue
 import com.atomu.aqualog.data.cycleText
+import com.atomu.aqualog.data.timeList
+import com.atomu.aqualog.data.fmtTime
+import com.atomu.aqualog.data.parseTime
+import com.atomu.aqualog.data.isDaily
 import com.atomu.aqualog.data.KIND_EQUIPMENT
 import com.atomu.aqualog.data.KIND_ROUTINE
 import com.atomu.aqualog.data.LOG_TYPES
@@ -128,7 +132,7 @@ fun ReminderScreen(vm: AppViewModel) {
             items(sorted, key = { it.id }) { r ->
                 ReminderCard(
                     r, tanks,
-                    onDone = { if (r.kind == KIND_EQUIPMENT) vm.completeMaintenance(r) else vm.completeReminder(r) },
+                    onDone = { if (r.kind == KIND_EQUIPMENT) vm.completeMaintenance(r) else vm.checkItem(r) },
                     onToggle = { vm.saveReminder(r.copy(enabled = it)) },
                     onClick = { editing = r },
                 )
@@ -179,7 +183,9 @@ fun ReminderCard(
             Column(Modifier.weight(1f)) {
                 Text("${tanks.nameOf(r.tankId)}：${r.title}", style = MaterialTheme.typography.titleMedium)
                 Text(
-                    "${r.cycleText}・前回 ${r.lastDone.fmtShortY()}・次回 ${r.nextDue.fmtShortY()}",
+                    if (r.isDaily) "毎日" + (if (r.timeList.isNotEmpty()) "・通知 " + r.timeList.joinToString(" ") { it.fmtTime() } else "")
+                    else "${r.cycleText}・前回 ${r.lastDone.fmtShortY()}・次回 ${r.nextDue.fmtShortY()}" +
+                        (if (r.timeList.isNotEmpty()) "・通知 " + r.timeList.joinToString(" ") { it.fmtTime() } else ""),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -218,6 +224,7 @@ private fun ReminderDialog(
     var useMonths by remember { mutableStateOf(init.intervalMonths > 0) }
     var interval by remember { mutableStateOf(if (init.intervalMonths > 0) init.intervalMonths.toString() else init.intervalDays.toString()) }
     var kind by remember { mutableIntStateOf(init.kind) }
+    var times by remember { mutableStateOf(init.timeList.joinToString(", ") { it.fmtTime() }) }
     var logType by remember { mutableStateOf(init.logType) }
     var lastDone by remember { mutableLongStateOf(init.lastDone) }
     val intervalNum = interval.trim().toIntOrNull()
@@ -233,6 +240,8 @@ private fun ReminderDialog(
                     intervalDays = if (useMonths) (intervalNum ?: 1) * 30 else (intervalNum ?: 7),
                     intervalMonths = if (useMonths) (intervalNum ?: 1) else 0,
                     logType = logType, lastDone = lastDone, kind = kind,
+                    times = times.split(',', '、', ' ').mapNotNull { parseTime(it) }.distinct().sorted()
+                        .joinToString(",") { it.fmtTime() }.ifBlank { null },
                 )
             )
         },
@@ -246,6 +255,12 @@ private fun ReminderDialog(
         FieldLabel("周期の単位")
         ChoiceRow(listOf(false, true), useMonths, { if (it) "か月" else "日" }, { useMonths = it })
         NumField(if (useMonths) "何か月ごと" else "何日ごと", interval, { interval = it }, Modifier.fillMaxWidth(), integer = true)
+        TextInput("通知する時刻（例 7:30, 19:00）", times, { times = it })
+        Text(
+            "「1日ごと」にすると、ホームの「今日やること」にチェック項目として出ます",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
         DateField("前回", lastDone, { if (it != null) lastDone = it })
         FieldLabel("この作業を記録したら自動で完了にする")
         ChoiceRow(listOf<String?>(null) + LOG_TYPES, logType, { it ?: "連動しない" }, {

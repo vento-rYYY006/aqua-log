@@ -27,6 +27,7 @@ class AquaApp : Application() {
         appScope.launch {
             val dao = AppDatabase.get(this@AquaApp).dao()
             if (dao.tankCount() == 0) Seed.run(dao)
+            com.atomu.aqualog.notify.TimeAlarms.rescheduleAll(this@AquaApp)
         }
     }
 

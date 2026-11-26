@@ -34,6 +34,12 @@ abstract class AquaDao {
     @Query("DELETE FROM livestock WHERE tankId = :tankId")
     abstract suspend fun deleteLivestockOf(tankId: Long)
 
+    @Query("DELETE FROM diary WHERE tankId = :tankId")
+    abstract suspend fun deleteDiaryOf(tankId: Long)
+
+    @Query("SELECT photoPath FROM diary WHERE tankId = :tankId AND photoPath IS NOT NULL")
+    abstract suspend fun diaryPhotosOf(tankId: Long): List<String>
+
     @Query("DELETE FROM reminders WHERE tankId = :tankId")
     abstract suspend fun deleteRemindersOf(tankId: Long)
 
@@ -55,6 +61,7 @@ abstract class AquaDao {
     @Transaction
     open suspend fun deleteTankCascade(tank: Tank) {
         deleteGalleryOfTank(tank.id)
+        deleteDiaryOf(tank.id)
         deleteNotesOfTank(tank.id)
         deleteLogsOf(tank.id)
         deleteTestsOf(tank.id)
@@ -72,6 +79,9 @@ abstract class AquaDao {
 
     @Delete
     abstract suspend fun deleteLog(entry: LogEntry)
+
+    @Query("DELETE FROM logs WHERE type = :type AND date = :date AND time = :time")
+    abstract suspend fun deleteLogsAt(type: String, date: Long, time: Int)
 
     // 水質
     @Query("SELECT * FROM water_tests ORDER BY date ASC, id ASC")
@@ -121,6 +131,13 @@ abstract class AquaDao {
     @Query("DELETE FROM livestock_notes WHERE livestockId = :id")
     abstract suspend fun deleteNotesOf(id: Long)
 
+    // 日記
+    @Query("SELECT * FROM diary ORDER BY date DESC, id DESC")
+    abstract fun diary(): Flow<List<DiaryEntry>>
+
+    @Upsert
+    abstract suspend fun upsertDiary(d: DiaryEntry): Long
+
     // リマインド
     @Query("SELECT * FROM reminders ORDER BY id")
     abstract fun reminders(): Flow<List<Reminder>>
@@ -136,7 +153,8 @@ abstract class AquaDao {
 
     @Query(
         "UPDATE reminders SET lastDone = :date " +
-            "WHERE logType = :type AND (tankId IS NULL OR tankId = :tankId) AND lastDone < :date"
+            "WHERE logType = :type AND (tankId IS NULL OR tankId = :tankId) AND lastDone < :date " +
+            "AND NOT (intervalMonths = 0 AND intervalDays <= 1)"
     )
     abstract suspend fun markDoneByType(type: String, tankId: Long, date: Long)
 }

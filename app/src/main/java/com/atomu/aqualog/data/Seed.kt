@@ -28,6 +28,8 @@ object Seed {
 
         dao.upsertReminder(Reminder(tankId = t60, title = "換水", intervalDays = 14, lastDone = today, logType = "換水"))
         dao.upsertReminder(Reminder(tankId = t40, title = "換水", intervalDays = 14, lastDone = today, logType = "換水"))
+        dao.upsertReminder(Reminder(tankId = null, title = "給餌（朝）", intervalDays = 1, lastDone = today - 1, logType = "給餌", times = "7:30"))
+        dao.upsertReminder(Reminder(tankId = null, title = "給餌（夜）", intervalDays = 1, lastDone = today - 1, logType = "給餌", times = "19:00"))
         dao.upsertReminder(Reminder(tankId = null, title = "比重チェック", intervalDays = 7, lastDone = today, logType = TYPE_WATER_TEST))
     }
 }
