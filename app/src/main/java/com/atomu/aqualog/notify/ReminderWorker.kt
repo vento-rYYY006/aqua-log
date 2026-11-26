@@ -15,6 +15,7 @@ import com.atomu.aqualog.MainActivity
 import com.atomu.aqualog.R
 import com.atomu.aqualog.data.AppDatabase
 import com.atomu.aqualog.data.nextDue
+import com.atomu.aqualog.data.timeList
 import java.time.LocalDate
 
 class ReminderWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
@@ -28,7 +29,8 @@ class ReminderWorker(context: Context, params: WorkerParameters) : CoroutineWork
         val dao = AppDatabase.get(ctx).dao()
         val today = LocalDate.now().toEpochDay()
         val tanks = dao.tanksOnce().associateBy { it.id }
-        val due = dao.remindersOnce().filter { it.enabled && it.nextDue <= today }
+        // 時刻つきの項目はその時刻に別で通知するので、ここでは扱わない
+        val due = dao.remindersOnce().filter { it.enabled && it.nextDue <= today && it.timeList.isEmpty() }
 
         if (due.isEmpty()) {
             if (inputData.getBoolean(KEY_TEST, false)) {
@@ -45,27 +47,31 @@ class ReminderWorker(context: Context, params: WorkerParameters) : CoroutineWork
         return Result.success()
     }
 
-    private fun post(ctx: Context, id: Int, title: String, text: String) {
-        val intent = Intent(ctx, MainActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-        }
-        val pi = PendingIntent.getActivity(ctx, 0, intent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
-        val n = NotificationCompat.Builder(ctx, CHANNEL_ID)
-            .setSmallIcon(R.drawable.ic_notify)
-            .setContentTitle(title)
-            .setContentText(text)
-            .setContentIntent(pi)
-            .setAutoCancel(true)
-            .build()
-        try {
-            NotificationManagerCompat.from(ctx).notify(id, n)
-        } catch (_: SecurityException) {
-        }
-    }
-
     companion object {
+        fun post(ctx: Context, id: Int, title: String, text: String) = postNotification(ctx, id, title, text)
         const val CHANNEL_ID = "reminders"
         const val NOTIFY_HOUR = 19
         const val KEY_TEST = "test"
+    }
+}
+
+fun postNotification(ctx: Context, id: Int, title: String, text: String) {
+    if (Build.VERSION.SDK_INT >= 33 &&
+        ContextCompat.checkSelfPermission(ctx, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+    ) return
+    val intent = Intent(ctx, MainActivity::class.java).apply {
+        flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+    }
+    val pi = PendingIntent.getActivity(ctx, 0, intent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+    val n = NotificationCompat.Builder(ctx, ReminderWorker.CHANNEL_ID)
+        .setSmallIcon(R.drawable.ic_notify)
+        .setContentTitle(title)
+        .setContentText(text)
+        .setContentIntent(pi)
+        .setAutoCancel(true)
+        .build()
+    try {
+        NotificationManagerCompat.from(ctx).notify(id, n)
+    } catch (_: SecurityException) {
     }
 }

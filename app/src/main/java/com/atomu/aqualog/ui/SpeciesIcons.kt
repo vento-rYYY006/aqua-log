@@ -80,6 +80,9 @@ fun iconFor(kind: String?, category: String): ImageVector {
     return SPECIES_ICONS.getValue(fallback)
 }
 
+val HomeIcon: ImageVector = lineIcon("ホーム", "M3 11l9-7 9 7 M5 10v10h14V10")
+val DiaryIcon: ImageVector = lineIcon("日記", "M5 4h11a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3z M5 17a3 3 0 0 1 3-3h11 M9 8h6")
+val BellIcon: ImageVector = lineIcon("リマインド", "M6 9a6 6 0 0 1 12 0c0 6 3 8 3 8H3s3-2 3-8 M10 20a2 2 0 0 0 4 0")
 val WarnIcon: ImageVector = lineIcon("注意", "M3 12a9 9 0 1 0 18 0a9 9 0 1 0 -18 0 M12 7v5.5 M12 16.5v0.01", 2f)
 val MoonIcon: ImageVector = lineIcon("ナイトモード", "M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z", 1.8f)
 val SunIcon: ImageVector = lineIcon(

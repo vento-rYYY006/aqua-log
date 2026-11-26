@@ -5,10 +5,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Build
-import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -35,11 +31,10 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 private data class TabDef(val label: String, val icon: ImageVector)
 
 private val TABS = listOf(
-    TabDef("ホーム", Icons.Filled.Home),
-    TabDef("作業", Icons.Filled.Build),
-    TabDef("水質", Icons.Filled.Info),
+    TabDef("ホーム", HomeIcon),
+    TabDef("日記", DiaryIcon),
     TabDef("生体", SPECIES_ICONS.getValue("クマノミ")),
-    TabDef("リマインド", Icons.Filled.Notifications),
+    TabDef("リマインド", BellIcon),
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -47,6 +42,8 @@ private val TABS = listOf(
 fun AquaRoot(vm: AppViewModel = viewModel()) {
     var tab by rememberSaveable { mutableIntStateOf(0) }
     var showTanks by rememberSaveable { mutableStateOf(false) }
+    var openTank by rememberSaveable { mutableStateOf<Long?>(null) }
+    val tanks by vm.tanks.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val mode by ThemePrefs.mode.collectAsStateWithLifecycle()
 
@@ -84,7 +81,7 @@ fun AquaRoot(vm: AppViewModel = viewModel()) {
                     TABS.forEachIndexed { i, t ->
                         NavigationBarItem(
                             selected = tab == i,
-                            onClick = { tab = i },
+                            onClick = { if (tab == i) openTank = null; tab = i },
                             icon = { Icon(t.icon, contentDescription = t.label) },
                             label = { Text(t.label) },
                         )
@@ -93,11 +90,15 @@ fun AquaRoot(vm: AppViewModel = viewModel()) {
             },
         ) { pad ->
             Box(Modifier.fillMaxSize().padding(pad)) {
-                when (tab) {
-                    0 -> HomeScreen(vm)
-                    1 -> LogScreen(vm)
-                    2 -> WaterScreen(vm)
-                    3 -> LivestockScreen(vm)
+                val detail = openTank?.let { id -> tanks.firstOrNull { it.id == id } }
+                when {
+                    tab == 0 && detail != null -> {
+                        BackHandler { openTank = null }
+                        TankDetail(vm, detail, onBack = { openTank = null })
+                    }
+                    tab == 0 -> HomeScreen(vm, onOpenTank = { openTank = it })
+                    tab == 1 -> DiaryScreen(vm)
+                    tab == 2 -> LivestockScreen(vm)
                     else -> ReminderScreen(vm)
                 }
             }

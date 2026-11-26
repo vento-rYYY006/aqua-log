@@ -12,6 +12,7 @@ private val SHORT = DateTimeFormatter.ofPattern("M/d", Locale.JAPAN)
 private val SHORT_Y = DateTimeFormatter.ofPattern("yy/M/d", Locale.JAPAN)
 
 fun today(): Long = LocalDate.now().toEpochDay()
+fun nowMinutes(): Int = java.time.LocalTime.now().let { it.hour * 60 + it.minute }
 fun Long.fmtDate(): String = LocalDate.ofEpochDay(this).format(FULL)
 fun Long.fmtShort(): String = LocalDate.ofEpochDay(this).format(SHORT)
 fun Long.fmtShortY(): String = LocalDate.ofEpochDay(this).format(SHORT_Y)

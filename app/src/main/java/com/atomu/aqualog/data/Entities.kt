@@ -15,6 +15,9 @@ data class Tank(
     val note: String = "",
     val sortOrder: Int = 0,
     val photoPath: String? = null,
+    /** 点灯・消灯の時刻（0時からの分） */
+    val lightOn: Int? = null,
+    val lightOff: Int? = null,
 )
 
 @Entity(tableName = "logs", indices = [Index("tankId")])
@@ -24,6 +27,19 @@ data class LogEntry(
     val date: Long,
     val type: String,
     val amount: String = "",
+    val note: String = "",
+    /** 記録した時刻（0時からの分）。null = 時刻なし */
+    val time: Int? = null,
+)
+
+/** 日記：水槽ごと・日ごとの写真と備考 */
+@Entity(tableName = "diary", indices = [Index(value = ["tankId", "date"])])
+data class DiaryEntry(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val tankId: Long,
+    val date: Long,
+    val photoPath: String? = null,
+    val photoTime: Int? = null,
     val note: String = "",
 )
 
@@ -94,7 +110,29 @@ data class Reminder(
     @ColumnInfo(defaultValue = "0") val intervalMonths: Int = 0,
     /** 0 = 毎日・短い周期、1 = 設備・消耗品 */
     @ColumnInfo(defaultValue = "0") val kind: Int = KIND_ROUTINE,
+    /** 通知する時刻（"7:30,19:00"）。空なら毎日19時のまとめ通知 */
+    val times: String? = null,
+    /** 最後に完了した時刻（0時からの分） */
+    val doneTime: Int? = null,
 )
+
+/** 毎日の項目（今日やること・時刻で通知） */
+val Reminder.isDaily: Boolean get() = intervalMonths == 0 && intervalDays <= 1
+
+/** 通知時刻（0時からの分）の一覧 */
+val Reminder.timeList: List<Int>
+    get() = times.orEmpty().split(',', '、', ' ').mapNotNull { parseTime(it) }.distinct().sorted()
+
+fun parseTime(s: String): Int? {
+    val t = s.trim().replace('：', ':')
+    if (t.isEmpty()) return null
+    val parts = t.split(':')
+    val h = parts[0].toIntOrNull() ?: return null
+    val m = if (parts.size > 1) parts[1].toIntOrNull() ?: return null else 0
+    return if (h in 0..23 && m in 0..59) h * 60 + m else null
+}
+
+fun Int.fmtTime(): String = "%d:%02d".format(this / 60, this % 60)
 
 val Reminder.nextDue: Long
     get() = if (intervalMonths > 0) {

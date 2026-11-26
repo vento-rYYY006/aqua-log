@@ -35,6 +35,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.atomu.aqualog.data.Tank
+import com.atomu.aqualog.data.fmtTime
+import com.atomu.aqualog.data.parseTime
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Row
 
 @Suppress("DEPRECATION")
 @OptIn(ExperimentalMaterial3Api::class)
@@ -84,39 +88,52 @@ fun TankScreen(vm: AppViewModel, onBack: () -> Unit) {
         }
     }
 
-    editing?.let { t ->
-        var name by remember(t) { mutableStateOf(t.name) }
-        var volume by remember(t) { mutableStateOf(t.volumeL?.fmt() ?: "") }
-        var note by remember(t) { mutableStateOf(t.note) }
-        var photo by remember(t) { mutableStateOf(t.photoPath) }
-        EditDialog(
-            title = if (t.id == 0L) "水槽を追加" else "水槽を編集",
-            onDismiss = {
-                val p = photo
-                if (p != null && p != t.photoPath) vm.discardPhoto(p)
-                editing = null
-            },
-            saveEnabled = name.isNotBlank(),
-            onSave = {
-                vm.saveTank(
-                    t.copy(name = name.trim(), volumeL = volume.toNum(), note = note.trim(), photoPath = photo),
-                    previousPhoto = t.photoPath,
-                )
-                editing = null
-            },
-            onDelete = if (t.id != 0L) ({ vm.deleteTank(t); editing = null }) else null,
-            deleteMessage = "「${t.name}」を削除しますか？\nこの水槽の作業・水質・生体・リマインドの記録もすべて消えます。",
-        ) {
-            WidePhotoPicker(
-                photo = photo,
-                originalPath = t.photoPath,
-                importPhoto = { vm.importPhoto(it) },
-                discardPhoto = { vm.discardPhoto(it) },
-                onChange = { photo = it },
+    editing?.let { t -> TankEditDialog(vm, t) { editing = null } }
+}
+
+/** 水槽の追加・編集（写真・水量・点灯時間） */
+@Composable
+fun TankEditDialog(vm: AppViewModel, t: Tank, onClose: () -> Unit) {
+    var name by remember(t) { mutableStateOf(t.name) }
+    var volume by remember(t) { mutableStateOf(t.volumeL?.fmt() ?: "") }
+    var note by remember(t) { mutableStateOf(t.note) }
+    var photo by remember(t) { mutableStateOf(t.photoPath) }
+    var lightOn by remember(t) { mutableStateOf(t.lightOn?.fmtTime() ?: "") }
+    var lightOff by remember(t) { mutableStateOf(t.lightOff?.fmtTime() ?: "") }
+    EditDialog(
+        title = if (t.id == 0L) "水槽を追加" else "水槽を編集",
+        onDismiss = {
+            val p = photo
+            if (p != null && p != t.photoPath) vm.discardPhoto(p)
+            onClose()
+        },
+        saveEnabled = name.isNotBlank(),
+        onSave = {
+            vm.saveTank(
+                t.copy(
+                    name = name.trim(), volumeL = volume.toNum(), note = note.trim(), photoPath = photo,
+                    lightOn = parseTime(lightOn), lightOff = parseTime(lightOff),
+                ),
+                previousPhoto = t.photoPath,
             )
-            TextInput("名前", name, { name = it })
-            NumField("水量（L）", volume, { volume = it }, Modifier.fillMaxWidth())
-            TextInput("メモ（機材など）", note, { note = it }, singleLine = false)
+            onClose()
+        },
+        onDelete = if (t.id != 0L) ({ vm.deleteTank(t); onClose() }) else null,
+        deleteMessage = "「${t.name}」を削除しますか？\nこの水槽の作業・水質・生体・リマインド・日記の記録もすべて消えます。",
+    ) {
+        WidePhotoPicker(
+            photo = photo,
+            originalPath = t.photoPath,
+            importPhoto = { vm.importPhoto(it) },
+            discardPhoto = { vm.discardPhoto(it) },
+            onChange = { photo = it },
+        )
+        TextInput("名前", name, { name = it })
+        NumField("水量（L）", volume, { volume = it }, Modifier.fillMaxWidth())
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Box(Modifier.weight(1f)) { TextInput("点灯（例 10:00）", lightOn, { lightOn = it }) }
+            Box(Modifier.weight(1f)) { TextInput("消灯（例 20:00）", lightOff, { lightOff = it }) }
         }
+        TextInput("メモ（機材など）", note, { note = it }, singleLine = false)
     }
 }

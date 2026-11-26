@@ -27,6 +27,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.atomu.aqualog.data.LOG_TYPES
 import com.atomu.aqualog.data.LogEntry
 import com.atomu.aqualog.data.Tank
+import com.atomu.aqualog.data.fmtTime
+import com.atomu.aqualog.data.parseTime
 
 @Composable
 fun LogScreen(vm: AppViewModel) {
@@ -73,7 +75,7 @@ fun LogScreen(vm: AppViewModel) {
 }
 
 @Composable
-private fun LogDialog(
+internal fun LogDialog(
     init: LogEntry,
     tanks: List<Tank>,
     onDismiss: () -> Unit,
@@ -85,18 +87,20 @@ private fun LogDialog(
     var type by remember { mutableStateOf(init.type) }
     var amount by remember { mutableStateOf(init.amount) }
     var note by remember { mutableStateOf(init.note) }
+    var time by remember { mutableStateOf(init.time?.fmtTime() ?: "") }
 
     EditDialog(
         title = if (init.id == 0L) "作業を記録" else "作業を編集",
         onDismiss = onDismiss,
         onSave = {
-            onSave(init.copy(tankId = tankId, date = date, type = type, amount = amount.trim(), note = note.trim()))
+            onSave(init.copy(tankId = tankId, date = date, type = type, amount = amount.trim(), note = note.trim(), time = parseTime(time)))
         },
         onDelete = onDelete,
     ) {
         FieldLabel("水槽")
         ChoiceRow(tanks.map { it.id }, tankId, { tanks.nameOf(it) }, { tankId = it })
         DateField("日付", date, { if (it != null) date = it })
+        TextInput("時刻（例 19:00・空でもよい）", time, { time = it })
         FieldLabel("作業")
         ChoiceRow(LOG_TYPES, type, { it }, { type = it })
         TextInput("量・内容（例：10L、ウールマット交換）", amount, { amount = it })
