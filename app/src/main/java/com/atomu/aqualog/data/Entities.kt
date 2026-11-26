@@ -13,6 +13,7 @@ data class Tank(
     val volumeL: Double? = null,
     val note: String = "",
     val sortOrder: Int = 0,
+    val photoPath: String? = null,
 )
 
 @Entity(tableName = "logs", indices = [Index("tankId")])

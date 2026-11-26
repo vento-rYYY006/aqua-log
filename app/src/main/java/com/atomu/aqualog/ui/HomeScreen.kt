@@ -1,6 +1,14 @@
 package com.atomu.aqualog.ui
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.height
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.layout.ContentScale
+import coil.compose.AsyncImage
+import java.io.File
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -32,6 +40,10 @@ fun HomeScreen(vm: AppViewModel) {
     val live by vm.livestock.collectAsStateWithLifecycle()
     val reminders by vm.reminders.collectAsStateWithLifecycle()
     val t = today()
+    var viewing by remember { mutableStateOf<Tank?>(null) }
+    viewing?.let { tk ->
+        tk.photoPath?.let { SinglePhotoDialog(it, tk.name) { viewing = null } }
+    }
     val upcoming = reminders.filter { it.enabled && it.nextDue <= t + 1 }.sortedBy { it.nextDue }
 
     LazyColumn(
@@ -53,14 +65,29 @@ fun HomeScreen(vm: AppViewModel) {
                 logs = logs.filter { it.tankId == tank.id },
                 tests = tests.filter { it.tankId == tank.id },
                 live = live.filter { it.tankId == tank.id && it.status == STATUS_ALIVE },
+                onPhotoClick = { viewing = tank },
             )
         }
     }
 }
 
 @Composable
-private fun TankSummary(tank: Tank, logs: List<LogEntry>, tests: List<WaterTest>, live: List<Livestock>) {
+private fun TankSummary(
+    tank: Tank,
+    logs: List<LogEntry>,
+    tests: List<WaterTest>,
+    live: List<Livestock>,
+    onPhotoClick: () -> Unit,
+) {
     ElevatedCard(Modifier.fillMaxWidth()) {
+        tank.photoPath?.let { path ->
+            AsyncImage(
+                model = File(path),
+                contentDescription = tank.name,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxWidth().height(180.dp).clickable(onClick = onPhotoClick),
+            )
+        }
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Row {
                 Text(tank.name, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)

@@ -40,6 +40,9 @@ abstract class AquaDao {
     @Query("SELECT photoPath FROM livestock WHERE tankId = :tankId AND photoPath IS NOT NULL")
     abstract suspend fun photosOf(tankId: Long): List<String>
 
+    @Query("SELECT photoPath FROM tanks WHERE id = :tankId")
+    abstract suspend fun tankPhoto(tankId: Long): String?
+
     @Transaction
     open suspend fun deleteTankCascade(tank: Tank) {
         deleteLogsOf(tank.id)

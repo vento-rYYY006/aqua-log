@@ -42,9 +42,13 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     val selectedTank = MutableStateFlow<Long?>(null)
 
     // 水槽
-    fun saveTank(t: Tank) = viewModelScope.launch { dao.upsertTank(t) }
+    fun saveTank(t: Tank, previousPhoto: String? = null) = viewModelScope.launch {
+        if (previousPhoto != null && previousPhoto != t.photoPath) deleteFile(previousPhoto)
+        dao.upsertTank(t)
+    }
     fun deleteTank(t: Tank) = viewModelScope.launch {
         dao.photosOf(t.id).forEach { deleteFile(it) }
+        dao.tankPhoto(t.id)?.let { deleteFile(it) }
         dao.deleteTankCascade(t)
         if (selectedTank.value == t.id) selectedTank.value = null
     }

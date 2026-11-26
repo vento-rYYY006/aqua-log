@@ -1,6 +1,19 @@
 package com.atomu.aqualog.ui
 
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.draw.clip
+import kotlinx.coroutines.launch
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.rememberTransformableState
 import androidx.compose.foundation.gestures.transformable
@@ -103,8 +116,9 @@ fun PhotoViewer(items: List<Livestock>, tanks: List<Tank>, startIndex: Int, onDi
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun ZoomableImage(path: String, name: String) {
+internal fun ZoomableImage(path: String, name: String) {
     var scale by remember { mutableFloatStateOf(1f) }
     var offset by remember { mutableStateOf(Offset.Zero) }
     val state = rememberTransformableState { zoom, pan, _ ->
@@ -136,4 +150,70 @@ private fun ZoomableImage(path: String, name: String) {
                 translationY = offset.y
             },
     )
+}
+
+/** 1枚だけ全画面で見る */
+@Composable
+fun SinglePhotoDialog(path: String, title: String, onDismiss: () -> Unit) {
+    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+        Box(Modifier.fillMaxSize().background(Color.Black)) {
+            ZoomableImage(path, title)
+            Text(
+                title,
+                color = Color.White,
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    .background(Color.Black.copy(alpha = 0.55f))
+                    .padding(horizontal = 20.dp, vertical = 16.dp),
+            )
+            IconButton(onClick = onDismiss, modifier = Modifier.align(Alignment.TopEnd).padding(8.dp)) {
+                Icon(Icons.Filled.Close, contentDescription = "閉じる", tint = Color.White)
+            }
+        }
+    }
+}
+
+/** 横長の写真を選ぶ欄（水槽用）。保存前に差し替えた写真はキャンセル時に消す */
+@Composable
+fun WidePhotoPicker(
+    photo: String?,
+    originalPath: String?,
+    importPhoto: suspend (Uri) -> String?,
+    discardPhoto: (String) -> Unit,
+    onChange: (String?) -> Unit,
+) {
+    val scope = rememberCoroutineScope()
+    val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+        if (uri != null) {
+            scope.launch {
+                val newPath = importPhoto(uri) ?: return@launch
+                if (photo != null && photo != originalPath) discardPhoto(photo)
+                onChange(newPath)
+            }
+        }
+    }
+    Column {
+        if (photo != null) {
+            AsyncImage(
+                model = File(photo),
+                contentDescription = "水槽の写真",
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxWidth().height(140.dp).clip(RoundedCornerShape(12.dp)),
+            )
+        }
+        Row {
+            OutlinedButton(onClick = {
+                picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+            }) { Text(if (photo == null) "写真を選ぶ" else "写真を変える") }
+            if (photo != null) {
+                TextButton(onClick = {
+                    if (photo != originalPath) discardPhoto(photo)
+                    onChange(null)
+                }) { Text("写真を外す") }
+            }
+        }
+    }
 }

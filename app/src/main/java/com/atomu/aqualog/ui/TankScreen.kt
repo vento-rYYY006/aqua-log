@@ -6,6 +6,12 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
+import coil.compose.AsyncImage
+import java.io.File
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
@@ -56,7 +62,18 @@ fun TankScreen(vm: AppViewModel, onBack: () -> Unit) {
             LazyColumn(contentPadding = PaddingValues(16.dp)) {
                 items(tanks, key = { it.id }) { t ->
                     val vol = t.volumeL?.let { "約${it.fmt()}L" } ?: ""
+                    val thumb: (@Composable () -> Unit)? = t.photoPath?.let { path ->
+                        {
+                            AsyncImage(
+                                model = File(path),
+                                contentDescription = t.name,
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier.size(56.dp).clip(RoundedCornerShape(8.dp)),
+                            )
+                        }
+                    }
                     ListItem(
+                        leadingContent = thumb,
                         headlineContent = { Text(t.name) },
                         supportingContent = { Text(listOf(vol, t.note).filter { it.isNotBlank() }.joinToString("・")) },
                         modifier = Modifier.fillMaxWidth().clickable { editing = t },
@@ -71,17 +88,32 @@ fun TankScreen(vm: AppViewModel, onBack: () -> Unit) {
         var name by remember(t) { mutableStateOf(t.name) }
         var volume by remember(t) { mutableStateOf(t.volumeL?.fmt() ?: "") }
         var note by remember(t) { mutableStateOf(t.note) }
+        var photo by remember(t) { mutableStateOf(t.photoPath) }
         EditDialog(
             title = if (t.id == 0L) "水槽を追加" else "水槽を編集",
-            onDismiss = { editing = null },
+            onDismiss = {
+                val p = photo
+                if (p != null && p != t.photoPath) vm.discardPhoto(p)
+                editing = null
+            },
             saveEnabled = name.isNotBlank(),
             onSave = {
-                vm.saveTank(t.copy(name = name.trim(), volumeL = volume.toNum(), note = note.trim()))
+                vm.saveTank(
+                    t.copy(name = name.trim(), volumeL = volume.toNum(), note = note.trim(), photoPath = photo),
+                    previousPhoto = t.photoPath,
+                )
                 editing = null
             },
             onDelete = if (t.id != 0L) ({ vm.deleteTank(t); editing = null }) else null,
             deleteMessage = "「${t.name}」を削除しますか？\nこの水槽の作業・水質・生体・リマインドの記録もすべて消えます。",
         ) {
+            WidePhotoPicker(
+                photo = photo,
+                originalPath = t.photoPath,
+                importPhoto = { vm.importPhoto(it) },
+                discardPhoto = { vm.discardPhoto(it) },
+                onChange = { photo = it },
+            )
             TextInput("名前", name, { name = it })
             NumField("水量（L）", volume, { volume = it }, Modifier.fillMaxWidth())
             TextInput("メモ（機材など）", note, { note = it }, singleLine = false)
