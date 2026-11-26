@@ -59,6 +59,7 @@ fun LivestockScreen(vm: AppViewModel) {
     val sel by vm.selectedTank.collectAsStateWithLifecycle()
     var showPast by rememberSaveable { mutableStateOf(false) }
     var editing by remember { mutableStateOf<Livestock?>(null) }
+    var viewing by remember { mutableStateOf<Long?>(null) }
 
     val list = all
         .filter { (sel == null || it.tankId == sel) && (showPast || it.status == STATUS_ALIVE) }
@@ -81,7 +82,10 @@ fun LivestockScreen(vm: AppViewModel) {
             }
             if (list.isEmpty()) item { EmptyNote("右下の＋から生体を登録できます") }
             items(list, key = { it.id }) { item ->
-                LivestockCard(item, tanks, showTank = sel == null) { editing = item }
+                LivestockCard(
+                    item, tanks, showTank = sel == null,
+                    onPhotoClick = { viewing = item.id },
+                ) { editing = item }
             }
         }
         FloatingActionButton(
@@ -91,6 +95,16 @@ fun LivestockScreen(vm: AppViewModel) {
             },
             modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp),
         ) { Icon(Icons.Filled.Add, contentDescription = "生体を登録") }
+    }
+
+    viewing?.let { id ->
+        val withPhotos = list.filter { it.photoPath != null }
+        PhotoViewer(
+            items = withPhotos,
+            tanks = tanks,
+            startIndex = withPhotos.indexOfFirst { it.id == id },
+            onDismiss = { viewing = null },
+        )
     }
 
     editing?.let { item ->
@@ -107,8 +121,9 @@ fun LivestockScreen(vm: AppViewModel) {
 }
 
 @Composable
-private fun Thumb(path: String?, name: String, size: Int) {
-    val mod = Modifier.size(size.dp).clip(RoundedCornerShape(10.dp))
+private fun Thumb(path: String?, name: String, size: Int, onClick: (() -> Unit)? = null) {
+    val base = Modifier.size(size.dp).clip(RoundedCornerShape(10.dp))
+    val mod = if (path != null && onClick != null) base.clickable(onClick = onClick) else base
     if (path != null) {
         AsyncImage(
             model = File(path),
@@ -128,10 +143,16 @@ private fun Thumb(path: String?, name: String, size: Int) {
 }
 
 @Composable
-private fun LivestockCard(item: Livestock, tanks: List<Tank>, showTank: Boolean, onClick: () -> Unit) {
+private fun LivestockCard(
+    item: Livestock,
+    tanks: List<Tank>,
+    showTank: Boolean,
+    onPhotoClick: () -> Unit,
+    onClick: () -> Unit,
+) {
     ElevatedCard(Modifier.fillMaxWidth().clickable(onClick = onClick)) {
         Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-            Thumb(item.photoPath, item.name, 64)
+            Thumb(item.photoPath, item.name, 72, onClick = onPhotoClick)
             Column(Modifier.padding(start = 12.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(item.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
