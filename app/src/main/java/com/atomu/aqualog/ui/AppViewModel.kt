@@ -9,6 +9,8 @@ import androidx.work.WorkManager
 import androidx.work.workDataOf
 import com.atomu.aqualog.data.AppDatabase
 import com.atomu.aqualog.data.Livestock
+import com.atomu.aqualog.data.LivestockNote
+import com.atomu.aqualog.data.LivestockPhoto
 import com.atomu.aqualog.data.LogEntry
 import com.atomu.aqualog.data.Reminder
 import com.atomu.aqualog.data.TYPE_WATER_TEST
@@ -37,6 +39,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     val tests = dao.tests().state()
     val livestock = dao.livestock().state()
     val reminders = dao.reminders().state()
+    val gallery = dao.gallery().state()
+    val notes = dao.notes().state()
 
     /** 画面上部で選んでいる水槽（null = すべて） */
     val selectedTank = MutableStateFlow<Long?>(null)
@@ -48,6 +52,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
     fun deleteTank(t: Tank) = viewModelScope.launch {
         dao.photosOf(t.id).forEach { deleteFile(it) }
+        dao.galleryPathsOfTank(t.id).forEach { deleteFile(it) }
         dao.tankPhoto(t.id)?.let { deleteFile(it) }
         dao.deleteTankCascade(t)
         if (selectedTank.value == t.id) selectedTank.value = null
@@ -74,8 +79,22 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
     fun deleteLivestock(item: Livestock) = viewModelScope.launch {
         item.photoPath?.let { deleteFile(it) }
+        dao.galleryPathsOf(item.id).forEach { deleteFile(it) }
+        dao.deleteGalleryOf(item.id)
+        dao.deleteNotesOf(item.id)
         dao.deleteLivestock(item)
     }
+
+    // 成長記録・メモ
+    fun addGalleryPhoto(livestockId: Long, path: String, date: Long) = viewModelScope.launch {
+        dao.upsertPhoto(LivestockPhoto(livestockId = livestockId, date = date, path = path))
+    }
+    fun deleteGalleryPhoto(p: LivestockPhoto) = viewModelScope.launch {
+        deleteFile(p.path)
+        dao.deletePhoto(p)
+    }
+    fun saveNote(n: LivestockNote) = viewModelScope.launch { dao.upsertNote(n) }
+    fun deleteNote(n: LivestockNote) = viewModelScope.launch { dao.deleteNote(n) }
 
     suspend fun importPhoto(uri: Uri): String? = withContext(Dispatchers.IO) {
         runCatching {
@@ -100,6 +119,14 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun deleteReminder(r: Reminder) = viewModelScope.launch { dao.deleteReminder(r) }
     fun completeReminder(r: Reminder) = viewModelScope.launch {
         dao.upsertReminder(r.copy(lastDone = maxOf(r.lastDone, today())))
+    }
+
+    /** 設備・消耗品の「実施した」：作業ログにも残す（全水槽なら各水槽に） */
+    fun completeMaintenance(r: Reminder) = viewModelScope.launch {
+        val t = today()
+        dao.upsertReminder(r.copy(lastDone = maxOf(r.lastDone, t)))
+        val ids = r.tankId?.let { listOf(it) } ?: dao.tanksOnce().map { it.id }
+        ids.forEach { dao.upsertLog(LogEntry(tankId = it, date = t, type = "機材メンテ", note = r.title)) }
     }
 
     fun sendTestNotification() {
