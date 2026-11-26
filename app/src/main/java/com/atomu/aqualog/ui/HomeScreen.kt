@@ -55,7 +55,7 @@ fun HomeScreen(vm: AppViewModel) {
             item { Text("予定の作業はありません", color = MaterialTheme.colorScheme.onSurfaceVariant) }
         } else {
             items(upcoming, key = { "r" + it.id }) { r ->
-                ReminderCard(r, tanks, onDone = { vm.completeReminder(r) })
+                ReminderCard(r, tanks, onDone = { if (r.kind == com.atomu.aqualog.data.KIND_EQUIPMENT) vm.completeMaintenance(r) else vm.completeReminder(r) })
             }
         }
         item { Text("水槽", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 8.dp)) }

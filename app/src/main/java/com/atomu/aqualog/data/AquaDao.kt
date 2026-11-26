@@ -43,8 +43,19 @@ abstract class AquaDao {
     @Query("SELECT photoPath FROM tanks WHERE id = :tankId")
     abstract suspend fun tankPhoto(tankId: Long): String?
 
+    @Query("SELECT p.path FROM livestock_photos p JOIN livestock l ON p.livestockId = l.id WHERE l.tankId = :tankId")
+    abstract suspend fun galleryPathsOfTank(tankId: Long): List<String>
+
+    @Query("DELETE FROM livestock_photos WHERE livestockId IN (SELECT id FROM livestock WHERE tankId = :tankId)")
+    abstract suspend fun deleteGalleryOfTank(tankId: Long)
+
+    @Query("DELETE FROM livestock_notes WHERE livestockId IN (SELECT id FROM livestock WHERE tankId = :tankId)")
+    abstract suspend fun deleteNotesOfTank(tankId: Long)
+
     @Transaction
     open suspend fun deleteTankCascade(tank: Tank) {
+        deleteGalleryOfTank(tank.id)
+        deleteNotesOfTank(tank.id)
         deleteLogsOf(tank.id)
         deleteTestsOf(tank.id)
         deleteLivestockOf(tank.id)
@@ -81,6 +92,34 @@ abstract class AquaDao {
 
     @Delete
     abstract suspend fun deleteLivestock(item: Livestock)
+
+    // 生体の成長記録・メモ
+    @Query("SELECT * FROM livestock_photos ORDER BY date ASC, id ASC")
+    abstract fun gallery(): Flow<List<LivestockPhoto>>
+
+    @Upsert
+    abstract suspend fun upsertPhoto(p: LivestockPhoto): Long
+
+    @Delete
+    abstract suspend fun deletePhoto(p: LivestockPhoto)
+
+    @Query("SELECT path FROM livestock_photos WHERE livestockId = :id")
+    abstract suspend fun galleryPathsOf(id: Long): List<String>
+
+    @Query("DELETE FROM livestock_photos WHERE livestockId = :id")
+    abstract suspend fun deleteGalleryOf(id: Long)
+
+    @Query("SELECT * FROM livestock_notes ORDER BY date DESC, id DESC")
+    abstract fun notes(): Flow<List<LivestockNote>>
+
+    @Upsert
+    abstract suspend fun upsertNote(n: LivestockNote): Long
+
+    @Delete
+    abstract suspend fun deleteNote(n: LivestockNote)
+
+    @Query("DELETE FROM livestock_notes WHERE livestockId = :id")
+    abstract suspend fun deleteNotesOf(id: Long)
 
     // リマインド
     @Query("SELECT * FROM reminders ORDER BY id")

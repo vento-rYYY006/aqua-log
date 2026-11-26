@@ -1,5 +1,6 @@
 package com.atomu.aqualog.data
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
@@ -55,6 +56,27 @@ data class Livestock(
     val status: String = STATUS_ALIVE,
     val endDate: Long? = null,
     val note: String = "",
+    /** 写真がないときに出すアイコン（null = 分類から自動） */
+    val iconKind: String? = null,
+)
+
+/** 生体の成長記録（写真） */
+@Entity(tableName = "livestock_photos", indices = [Index("livestockId")])
+data class LivestockPhoto(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val livestockId: Long,
+    val date: Long,
+    val path: String,
+)
+
+/** 生体ごとのメモ（混泳・餌の食いつきなど） */
+@Entity(tableName = "livestock_notes", indices = [Index("livestockId")])
+data class LivestockNote(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val livestockId: Long,
+    val date: Long,
+    val tag: String,
+    val text: String,
 )
 
 @Entity(tableName = "reminders")
@@ -68,9 +90,25 @@ data class Reminder(
     /** この種類の作業を記録したら自動で「完了」にする */
     val logType: String? = null,
     val enabled: Boolean = true,
+    /** 0 より大きければ「○か月ごと」（intervalDays より優先） */
+    @ColumnInfo(defaultValue = "0") val intervalMonths: Int = 0,
+    /** 0 = 毎日・短い周期、1 = 設備・消耗品 */
+    @ColumnInfo(defaultValue = "0") val kind: Int = KIND_ROUTINE,
 )
 
-val Reminder.nextDue: Long get() = lastDone + intervalDays
+val Reminder.nextDue: Long
+    get() = if (intervalMonths > 0) {
+        java.time.LocalDate.ofEpochDay(lastDone).plusMonths(intervalMonths.toLong()).toEpochDay()
+    } else {
+        lastDone + intervalDays
+    }
+
+val Reminder.cycleText: String
+    get() = if (intervalMonths > 0) "${intervalMonths}か月ごと" else "${intervalDays}日ごと"
+
+const val KIND_ROUTINE = 0
+const val KIND_EQUIPMENT = 1
+val NOTE_TAGS = listOf("メモ", "餌の食いつき", "混泳", "体調")
 
 const val STATUS_ALIVE = "飼育中"
 val STATUSES = listOf(STATUS_ALIVE, "移動済み", "譲渡", "死亡")

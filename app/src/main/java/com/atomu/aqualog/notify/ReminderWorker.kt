@@ -39,7 +39,7 @@ class ReminderWorker(context: Context, params: WorkerParameters) : CoroutineWork
         due.forEach { r ->
             val tankName = r.tankId?.let { tanks[it]?.name } ?: "全水槽"
             val over = today - r.nextDue
-            val body = if (over == 0L) "今日が予定日です" else "予定日を${over}日過ぎています"
+            val body = if (over == 0L) "今日が予定日です" else "予定日から${over}日たちました"
             post(ctx, r.id.toInt() + 1, "$tankName：${r.title}", body)
         }
         return Result.success()

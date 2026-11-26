@@ -40,6 +40,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.material3.Surface
+import androidx.activity.compose.BackHandler
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -60,6 +65,7 @@ fun LivestockScreen(vm: AppViewModel) {
     var showPast by rememberSaveable { mutableStateOf(false) }
     var editing by remember { mutableStateOf<Livestock?>(null) }
     var viewing by remember { mutableStateOf<Long?>(null) }
+    var detailId by rememberSaveable { mutableStateOf<Long?>(null) }
 
     val list = all
         .filter { (sel == null || it.tankId == sel) && (showPast || it.status == STATUS_ALIVE) }
@@ -68,7 +74,17 @@ fun LivestockScreen(vm: AppViewModel) {
                 .thenBy { it.addedDate ?: Long.MAX_VALUE }
         )
 
-    Box(Modifier.fillMaxSize()) {
+    val detail = detailId?.let { id -> all.firstOrNull { it.id == id } }
+    if (detail != null) {
+        BackHandler { detailId = null }
+        LivestockDetail(
+            vm = vm,
+            ls = detail,
+            tanks = tanks,
+            onBack = { detailId = null },
+            onEdit = { editing = detail },
+        )
+    } else Box(Modifier.fillMaxSize()) {
         LazyColumn(
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 96.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -85,7 +101,7 @@ fun LivestockScreen(vm: AppViewModel) {
                 LivestockCard(
                     item, tanks, showTank = sel == null,
                     onPhotoClick = { viewing = item.id },
-                ) { editing = item }
+                ) { detailId = item.id }
             }
         }
         FloatingActionButton(
@@ -121,8 +137,9 @@ fun LivestockScreen(vm: AppViewModel) {
 }
 
 @Composable
-private fun Thumb(path: String?, name: String, size: Int, onClick: (() -> Unit)? = null) {
-    val base = Modifier.size(size.dp).clip(RoundedCornerShape(10.dp))
+fun Thumb(path: String?, name: String, size: Int, icon: ImageVector? = null, onClick: (() -> Unit)? = null) {
+    val base = Modifier.size(size.dp).clip(RoundedCornerShape(2.dp))
+        .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(2.dp))
     val mod = if (path != null && onClick != null) base.clickable(onClick = onClick) else base
     if (path != null) {
         AsyncImage(
@@ -133,11 +150,20 @@ private fun Thumb(path: String?, name: String, size: Int, onClick: (() -> Unit)?
         )
     } else {
         Box(mod.background(MaterialTheme.colorScheme.secondaryContainer), contentAlignment = Alignment.Center) {
-            Text(
-                name.take(1).ifEmpty { "?" },
-                style = MaterialTheme.typography.titleLarge,
-                color = MaterialTheme.colorScheme.onSecondaryContainer,
-            )
+            if (icon != null) {
+                Icon(
+                    icon,
+                    contentDescription = name,
+                    tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                    modifier = Modifier.size((size * 0.62f).dp),
+                )
+            } else {
+                Text(
+                    name.take(1).ifEmpty { "?" },
+                    style = MaterialTheme.typography.titleLarge,
+                    color = MaterialTheme.colorScheme.onSecondaryContainer,
+                )
+            }
         }
     }
 }
@@ -152,13 +178,13 @@ private fun LivestockCard(
 ) {
     ElevatedCard(Modifier.fillMaxWidth().clickable(onClick = onClick)) {
         Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-            Thumb(item.photoPath, item.name, 72, onClick = onPhotoClick)
+            Thumb(item.photoPath, item.name, 64, icon = iconFor(item.iconKind, item.category), onClick = onPhotoClick)
             Column(Modifier.padding(start = 12.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(item.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                     if (item.count > 1) Text("  ×${item.count}", style = MaterialTheme.typography.titleSmall)
                     if (item.status != STATUS_ALIVE) {
-                        Text("  ${item.status}", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.error)
+                        Text("  ${item.status}", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
                 val sub = buildList {
@@ -201,6 +227,7 @@ private fun LivestockDialog(
     var status by remember { mutableStateOf(init.status) }
     var endDate by remember { mutableStateOf(init.endDate) }
     var note by remember { mutableStateOf(init.note) }
+    var iconKind by remember { mutableStateOf(init.iconKind) }
 
     val scope = rememberCoroutineScope()
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
@@ -237,6 +264,7 @@ private fun LivestockDialog(
                     status = status,
                     endDate = if (status == STATUS_ALIVE) null else (endDate ?: today()),
                     note = note.trim(),
+                    iconKind = iconKind,
                 )
             )
         },
@@ -244,7 +272,7 @@ private fun LivestockDialog(
         deleteMessage = "「${init.name}」を台帳から削除しますか？\n（死亡・移動の記録として残すなら、状態を変更してください）",
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Thumb(photo, name, 72)
+            Thumb(photo, name, 72, icon = iconFor(iconKind, category))
             Column(Modifier.padding(start = 8.dp)) {
                 OutlinedButton(onClick = {
                     picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
@@ -258,6 +286,8 @@ private fun LivestockDialog(
                 }
             }
         }
+        FieldLabel(if (photo == null) "アイコン（写真がないとき表示）" else "アイコン（写真を外したとき表示）")
+        IconPicker(selected = iconKind ?: "", onSelect = { iconKind = it })
         TextInput("名前", name, { name = it })
         FieldLabel("水槽")
         ChoiceRow(tanks.map { it.id }, tankId, { tanks.nameOf(it) }, { tankId = it })
@@ -273,5 +303,42 @@ private fun LivestockDialog(
             DateField("日付", endDate ?: today(), { endDate = it })
         }
         TextInput("メモ", note, { note = it }, singleLine = false)
+    }
+}
+
+@Composable
+private fun IconPicker(selected: String, onSelect: (String) -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        listOf(FISH_ICON_KEYS, OTHER_ICON_KEYS).forEach { keys ->
+            keys.chunked(4).forEach { rowKeys ->
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
+                    rowKeys.forEach { k ->
+                        val on = k == selected
+                        Surface(
+                            onClick = { onSelect(k) },
+                            shape = RoundedCornerShape(2.dp),
+                            color = if (on) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface,
+                            contentColor = if (on) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
+                            border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+                            modifier = Modifier.weight(1f).aspectRatio(1f),
+                        ) {
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.Center,
+                            ) {
+                                Icon(SPECIES_ICONS.getValue(k), contentDescription = null, modifier = Modifier.size(26.dp))
+                                Text(
+                                    if (k == "チョウチョウウオ") "チョウ" else k,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    maxLines = 1,
+                                    softWrap = false,
+                                )
+                            }
+                        }
+                    }
+                    repeat(4 - rowKeys.size) { Box(Modifier.weight(1f)) }
+                }
+            }
+        }
     }
 }
